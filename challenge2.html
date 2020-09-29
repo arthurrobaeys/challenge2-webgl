@@ -1,0 +1,292 @@
+<!-- //https://www.shadertoy.com/view/MtlBDf -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>WebGL</title>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+
+    <style>
+      #c {
+        position: fixed;
+        left: 0;
+        top: 0;
+        display: block;
+      }
+      #sliders {
+        z-index: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 1.2rem;
+        position: relative;
+        color: white;
+      }
+      #title {
+        position: absolute;
+        left: 50%;
+        top: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        color: white;
+        font-size: 1.2rem;
+      }
+    </style>
+
+    <div id="sliders">
+      <input
+        type="range"
+        id="waves"
+        value="1"
+        step="2"
+        min="1"
+        max="50"
+      />Sin<br />
+      <input
+        type="range"
+        id="size"
+        value="0.001"
+        step="0.001"
+        min="0.001"
+        max="0.01"
+      />Size<br />
+      <input
+        type="range"
+        id="length"
+        value="0.5"
+        step="0.05"
+        min="0.3"
+        max="1"
+      />length<br />
+      <input
+        type="range"
+        id="color"
+        value="0"
+        step="0.1"
+        min="0"
+        max="1"
+      />color<br />
+      <input
+        type="range"
+        id="rotation"
+        value="0.005"
+        step="0.001"
+        min="0"
+        max="0.06"
+      />Rotation<br />
+      <input
+        type="range"
+        id="eggSize"
+        value="1"
+        step="0.1"
+        min="0.5"
+        max="2"
+      />eggSize<br />
+    </div>
+
+    <p id="title">The Infinity Egg</p>
+
+    <script type="module">
+      import * as THREE from "./../threejs/three.module.js";
+      function main() {
+        const canvas = document.querySelector("#c");
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const $sin = document.getElementById("waves");
+        const $colorOffset = document.getElementById("color");
+        const $size = document.getElementById("size");
+        const $length = document.getElementById("length");
+        const $rotation = document.getElementById("rotation");
+        const $eggSize = document.getElementById("eggSize");
+
+        let eggSize = 1;
+
+        const renderer = new THREE.WebGLRenderer({ canvas });
+
+        const scene = new THREE.Scene();
+        const scene2 = new THREE.Scene();
+
+        const plane = new THREE.PlaneBufferGeometry(
+          canvas.width,
+          canvas.height
+        );
+        const fragmentShader = `
+  
+        #include <common>
+
+  uniform vec3 iResolution;
+  uniform float iTime;
+  uniform float wave;
+  uniform float lengthSize;
+  uniform float colorOffset;
+  uniform float size;
+
+  uniform vec2 u_mouse;
+
+  void mainImage( out vec4 fragColor, in vec2 fragCoord ){
+    vec2 p = fragCoord /iResolution.xy - 0.5; // -0.5 -- 0.5
+    p.x*=iResolution.x/iResolution.y;
+	  float l = length(p);
+    float t = iTime;
+
+    p.x-= u_mouse[0];
+    p.y-= 1.-u_mouse[1];
+    
+	  vec3 c;
+    for(int i=0;i<=2;i++) {
+		  t+=colorOffset;               
+      vec2 a = p + p/l * (1.+cos(t)) * abs(sin(l*wave-t*2.));
+      l*= lengthSize;
+		  c[i]=size/length( fract(0.5+a)-0.5 );
+    }
+	fragColor=vec4(c/l,0.);
+}
+
+  void main() {
+    mainImage(gl_FragColor, gl_FragCoord.xy);
+  }
+
+  
+  `;
+        let waves = 9;
+        let colorOffset = 0.01;
+        let size = 0.001;
+        let mouse = { x: 0.5, y: 0.5 };
+        let length = 0.5;
+        let rotation = 0.005;
+        const uniforms = {
+          iTime: { value: 0 },
+          iResolution: { value: new THREE.Vector3() },
+          wave: { value: waves },
+          colorOffset: { value: colorOffset },
+          size: { value: size },
+          lengthSize: { value: length },
+          u_mouse: { value: { x: 0, y: 0 } },
+        };
+
+        const material = new THREE.ShaderMaterial({
+          fragmentShader,
+          uniforms,
+        });
+
+        const material2 = new THREE.MeshBasicMaterial({ color: 0x00000 });
+
+        const geometry = new THREE.OctahedronGeometry(2, 3);
+
+        scene.add(new THREE.Mesh(plane, material2));
+
+        const objectEgg = new THREE.Mesh(geometry, material);
+        scene2.add(objectEgg);
+
+        // wireframe
+        let geo = new THREE.EdgesGeometry(objectEgg.geometry); // or WireframeGeometry
+        let mat = new THREE.LineBasicMaterial({
+          color: 0xffffff,
+          linewidth: 2,
+        });
+        let wireframe = new THREE.LineSegments(geo, mat);
+        objectEgg.add(wireframe);
+
+        // Camera
+        let screenWidth = window.innerWidth;
+        let screenHeight = window.innerHeight;
+        let viewAngle = 75;
+        let nearDistance = 0.1;
+        let farDistance = 1000;
+
+        const camera = new THREE.PerspectiveCamera(
+          viewAngle,
+          screenWidth / screenHeight,
+          nearDistance,
+          farDistance
+        );
+        scene.add(camera);
+        camera.position.set(0, 0, 5);
+        camera.lookAt(scene.position);
+
+        function resizeRendererToDisplaySize(renderer) {
+          const canvas = renderer.domElement;
+          const width = canvas.clientWidth;
+          const height = canvas.clientHeight;
+          const needResize = canvas.width !== width || canvas.height !== height;
+          if (needResize) {
+            renderer.setSize(width, height, false);
+          }
+          return needResize;
+        }
+
+        document.addEventListener("mousemove", (e) => {
+          const canvasSize = canvas.getBoundingClientRect();
+          const canvasScale = canvas.width / canvasSize.width;
+
+          mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+          mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+          let vector = new THREE.Vector3(mouse.x, mouse.y, 0.5);
+          vector.unproject(camera);
+          let dir = vector.sub(camera.position).normalize();
+          let distance = -camera.position.z / dir.z;
+          let pos = camera.position.clone().add(dir.multiplyScalar(distance)); //multiplies vector by scalar s
+
+          objectEgg.position.copy(pos);
+        });
+
+        function render(time) {
+          time *= 0.001; // convert to seconds
+          objectEgg.rotation.x += rotation;
+          objectEgg.rotation.y += rotation;
+          resizeRendererToDisplaySize(renderer);
+
+          const canvas = renderer.domElement;
+          uniforms.iResolution.value.set(canvas.width, canvas.height, 1);
+          $sin.addEventListener("input", (e) => {
+            waves = parseFloat(e.target.value);
+          });
+
+          $colorOffset.addEventListener("input", (e) => {
+            colorOffset = parseFloat(e.target.value);
+          });
+
+          $size.addEventListener("input", (e) => {
+            size = parseFloat(e.target.value);
+          });
+
+          $length.addEventListener("input", (e) => {
+            length = parseFloat(e.target.value);
+          });
+
+          $rotation.addEventListener("input", (e) => {
+            rotation = parseFloat(e.target.value);
+          });
+
+          $eggSize.addEventListener("input", (e) => {
+            eggSize = parseFloat(e.target.value);
+          });
+
+          uniforms.colorOffset.value = colorOffset;
+          uniforms.size.value = size;
+          uniforms.lengthSize.value = length;
+          uniforms.wave.value = waves;
+          uniforms.iTime.value = time;
+          uniforms.u_mouse.value = mouse;
+
+          objectEgg.scale.x = eggSize;
+          objectEgg.scale.y = eggSize;
+
+          renderer.clear();
+          renderer.render(scene, camera);
+          renderer.clearDepth();
+          renderer.render(scene2, camera);
+
+          requestAnimationFrame(render);
+        }
+
+        requestAnimationFrame(render);
+      }
+
+      main();
+    </script>
+  </body>
+</html>
